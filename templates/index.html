@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mood-to-Spotify</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="page-shell">
+        <div class="glow glow-one"></div>
+        <div class="glow glow-two"></div>
+
+        <main class="layout">
+            <section class="hero card">
+                <p class="eyebrow">Mood-to-Spotify</p>
+                <h1>Tell me how you want it to feel.</h1>
+                <p class="lede">
+                    You do not need genre names or perfect wording. Write it the way you would text a friend, and the app will turn that feeling into a Spotify-ready search.
+                </p>
+
+                <div class="example-row" aria-label="Example moods">
+                    <button type="button" class="example-chip" data-fill="Something warm, slow, and a little late-night.">Warm, slow, late-night</button>
+                    <button type="button" class="example-chip" data-fill="I need focus music that still feels alive, not sterile.">Focused, but still alive</button>
+                    <button type="button" class="example-chip" data-fill="Give me songs for a long drive after a heavy week.">Long-drive reset</button>
+                    <button type="button" class="example-chip" data-fill="I want something soft and hopeful that does not feel cheesy.">Soft and hopeful</button>
+                </div>
+            </section>
+
+            <section class="composer card">
+                <form method="post" class="composer-form">
+                    <label class="field">
+                        <span>What are you in the mood for?</span>
+                        <textarea
+                            name="mood_text"
+                            rows="4"
+                            placeholder="A little hopeful, a little tired, but still moving."
+                        >{{ form_data.mood_text }}</textarea>
+                        <small class="field-note">A full sentence works best. Messy, specific, or honest is fine.</small>
+                    </label>
+
+                    <div class="field-row">
+                        <label class="field">
+                            <span>How many tracks should I pull?</span>
+                            <div class="range-wrap">
+                                <input
+                                    id="limit"
+                                    type="range"
+                                    name="limit"
+                                    min="1"
+                                    max="10"
+                                    value="{{ form_data.limit }}"
+                                >
+                                <div class="range-meta">
+                                    <strong><span id="limitValue">{{ form_data.limit }}</span> tracks</strong>
+                                    <span>Enough to hear the mood without turning it into homework.</span>
+                                </div>
+                            </div>
+                        </label>
+
+                        <label class="field market-field">
+                            <span>Which Spotify market?</span>
+                            <input
+                                type="text"
+                                name="market"
+                                value="{{ form_data.market }}"
+                                maxlength="2"
+                                list="market-options"
+                                placeholder="US"
+                            >
+                            <small class="field-note">Usually your two-letter country code, like `US` or `CA`.</small>
+                        </label>
+                    </div>
+
+                    <datalist id="market-options">
+                        <option value="US"></option>
+                        <option value="CA"></option>
+                        <option value="GB"></option>
+                        <option value="AU"></option>
+                        <option value="IN"></option>
+                    </datalist>
+
+                    <div class="actions">
+                        <button type="submit" name="action" value="recommend" class="primary-button">
+                            Build my playlist
+                        </button>
+                        <button type="submit" name="action" value="check-config" class="secondary-button">
+                            Check setup
+                        </button>
+                    </div>
+
+                    <p class="loading-note" data-loading-note hidden></p>
+                </form>
+            </section>
+
+            {% if feedback %}
+            <section class="status card status-{{ feedback.kind }}" role="status" aria-live="polite">
+                <p class="status-title">{{ feedback.title }}</p>
+                <p class="status-message">{{ feedback.message }}</p>
+            </section>
+            {% endif %}
+
+            {% if result %}
+            <section class="summary-grid">
+                <article class="card summary-card">
+                    <p class="section-label">Mood read</p>
+                    <h2>{{ result.emotion.emotion|title }}</h2>
+                    <p class="summary-copy">
+                        I read your note as <strong>{{ result.emotion.mood|title }}</strong> with
+                        <strong>{{ result.emotion.energy|title }}</strong> energy.
+                    </p>
+                    <div class="chip-row">
+                        {% for keyword in result.emotion.keywords %}
+                        <span class="chip">{{ keyword }}</span>
+                        {% endfor %}
+                    </div>
+                </article>
+
+                <article class="card summary-card">
+                    <p class="section-label">Spotify search</p>
+                    <h2>What I sent to Spotify</h2>
+                    <p class="query">{{ result.query }}</p>
+                    <p class="summary-copy">That search blends the extracted keywords with mood language that tends to work better for tracks.</p>
+                </article>
+            </section>
+
+            <section class="results card">
+                <div class="results-header">
+                    <div>
+                        <p class="section-label">Tracks</p>
+                        <h2>Start here</h2>
+                    </div>
+                    <p class="result-count">{{ result.songs|length }} tracks</p>
+                </div>
+
+                {% if result.songs %}
+                <div class="track-list">
+                    {% for song in result.songs %}
+                    <article class="track-card">
+                        <p class="track-index">{{ loop.index }}</p>
+                        <div class="track-copy">
+                            <h3>{{ song.name }}</h3>
+                            <p>{{ song.artist }}</p>
+                            {% if song.preview_url %}
+                            <audio controls preload="none" class="preview-player">
+                                <source src="{{ song.preview_url }}">
+                            </audio>
+                            {% else %}
+                            <p class="preview-unavailable">Spotify does not offer a preview clip for this one.</p>
+                            {% endif %}
+                        </div>
+                        <div class="track-links">
+                            {% if song.spotify_url %}
+                            <a href="{{ song.spotify_url }}" target="_blank" rel="noreferrer">Open in Spotify</a>
+                            {% endif %}
+                        </div>
+                    </article>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <p>No tracks came back for that exact wording.</p>
+                    <p>Try broadening the mood a little, or switch the market and run it again.</p>
+                </div>
+                {% endif %}
+            </section>
+            {% endif %}
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

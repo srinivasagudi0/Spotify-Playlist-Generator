@@ -1,29 +1,27 @@
-"""
-Handles Spotify API 
-
-Responsible for:
-1. Authentication
-2. Searching for songs
-3. Return:
-    a. name
-    b. artist
-    d. song preview url
-"""
+"""Spotify API helpers for search-based recommendations."""
 
 import base64
 import json
 import os
-from urllib.parse import urlencode
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 
 AUTH_URL = "https://accounts.spotify.com/api/token"
 SEARCH_URL = "https://api.spotify.com/v1/search"
+USER_AGENT = "MoodMusicCLI/1.0"
+
+
+class SpotifyError(Exception):
+    """Raised when Spotify authentication or search fails."""
 
 
 def read_error_message(error):
-    message = error.read().decode("utf-8")
+    try:
+        message = error.read().decode("utf-8")
+    except Exception:
+        return str(error)
 
     try:
         data = json.loads(message)
@@ -39,12 +37,13 @@ def read_error_message(error):
     return message
 
 
-def get_access_token():
+def get_access_token(opener=None):
+    opener = urlopen if opener is None else opener
     client_id = os.getenv("SPOTIFY_CLIENT_ID")
     client_secret = os.getenv("SPOTIFY_CLIENT_SECRET")
 
     if not client_id or not client_secret:
-        raise ValueError("Missing SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET")
+        raise SpotifyError("Missing SPOTIFY_CLIENT_ID or SPOTIFY_CLIENT_SECRET")
 
     credentials = f"{client_id}:{client_secret}".encode("utf-8")
     encoded_credentials = base64.b64encode(credentials).decode("utf-8")
@@ -55,28 +54,37 @@ def get_access_token():
         headers={
             "Authorization": f"Basic {encoded_credentials}",
             "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": "MoodMusicApp/1.0",
+            "User-Agent": USER_AGENT,
         },
         method="POST",
     )
 
     try:
-        with urlopen(request) as response:
+        with opener(request) as response:
             data = json.loads(response.read().decode("utf-8"))
     except HTTPError as error:
         message = read_error_message(error)
-        raise ValueError(f"Spotify login failed: {message}")
+        raise SpotifyError(f"Spotify login failed: {message}") from error
     except URLError as error:
-        raise ValueError(f"Spotify connection failed: {error.reason}")
+        raise SpotifyError(f"Spotify connection failed: {error.reason}") from error
 
-    return data["access_token"]
+    access_token = data.get("access_token")
+    if not access_token:
+        raise SpotifyError("Spotify login failed: access token missing from response.")
+
+    return access_token
 
 
-def search_songs(query, limit=5, market="US"):
-    access_token = get_access_token()
+def search_songs(query, limit=5, market="US", opener=None):
+    opener = urlopen if opener is None else opener
+    search_query = query.strip()
+    if not search_query:
+        return []
+
+    access_token = get_access_token(opener=opener)
     params = urlencode(
         {
-            "q": query,
+            "q": search_query,
             "type": "track",
             "limit": limit,
             "market": market,
@@ -88,30 +96,36 @@ def search_songs(query, limit=5, market="US"):
         headers={
             "Authorization": f"Bearer {access_token}",
             "Accept": "application/json",
-            "User-Agent": "MoodMusicApp/1.0",
+            "User-Agent": USER_AGENT,
         },
     )
 
     try:
-        with urlopen(request) as response:
+        with opener(request) as response:
             data = json.loads(response.read().decode("utf-8"))
     except HTTPError as error:
         message = read_error_message(error)
         if "Active premium subscription required for the owner of the app" in message:
-            raise ValueError(
+            raise SpotifyError(
                 "Spotify blocked this app. The app owner's Spotify account needs Premium for this Development Mode app."
-            )
-        raise ValueError(f"Spotify search failed: {message}")
+            ) from error
+        raise SpotifyError(f"Spotify search failed: {message}") from error
     except URLError as error:
-        raise ValueError(f"Spotify connection failed: {error.reason}")
+        raise SpotifyError(f"Spotify connection failed: {error.reason}") from error
 
     results = []
     for track in data.get("tracks", {}).get("items", []):
+        artist_names = ", ".join(
+            artist.get("name", "").strip()
+            for artist in track.get("artists", [])
+            if artist.get("name", "").strip()
+        )
         results.append(
             {
-                "name": track["name"],
-                "artist": ", ".join(artist["name"] for artist in track["artists"]),
-                "preview_url": track["preview_url"],
+                "name": track.get("name") or "Unknown Track",
+                "artist": artist_names or "Unknown Artist",
+                "preview_url": track.get("preview_url"),
+                "spotify_url": track.get("external_urls", {}).get("spotify"),
             }
         )
 
