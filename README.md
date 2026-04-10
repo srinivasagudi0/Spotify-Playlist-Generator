@@ -1,6 +1,6 @@
 # Mood-to-Spotify CLI
 
-A local Python app that turns a mood description into Spotify track recommendations. It includes an interactive CLI and a browser UI, uses OpenAI to extract an emotion payload, and uses Spotify Search to fetch matching tracks.
+A local Python app that turns a mood description into Spotify track recommendations. The repository now contains only the core logic and the interactive CLI. All UI layers were removed.
 
 ## Requirements
 
@@ -31,23 +31,6 @@ export OPENAI_MODEL="gpt-3.5-turbo"
 ```
 
 The CLI does not load a `.env` file in this milestone.
-
-## Web UI
-
-Run the browser UI with:
-
-```bash
-python3 app.py
-```
-
-Then open `http://127.0.0.1:5000`.
-
-The UI keeps the same recommendation logic as the CLI, but wraps it in a more conversational form with:
-
-- a mood prompt
-- a track-count slider
-- a market field
-- clear setup and error states
 
 ## CLI
 
