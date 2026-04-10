@@ -3,9 +3,12 @@
 import base64
 import json
 import os
+import ssl
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+
+import certifi
 
 
 AUTH_URL = "https://accounts.spotify.com/api/token"
@@ -15,6 +18,11 @@ USER_AGENT = "MoodMusicCLI/1.0"
 
 class SpotifyError(Exception):
     """Raised when Spotify authentication or search fails."""
+
+
+def open_url(request):
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    return urlopen(request, context=ssl_context)
 
 
 def read_error_message(error):
@@ -38,7 +46,7 @@ def read_error_message(error):
 
 
 def get_access_token(opener=None):
-    opener = urlopen if opener is None else opener
+    opener = open_url if opener is None else opener
     client_id = os.getenv("SPOTIFY_CLIENT_ID")
     client_secret = os.getenv("SPOTIFY_CLIENT_SECRET")
 
@@ -76,7 +84,7 @@ def get_access_token(opener=None):
 
 
 def search_songs(query, limit=5, market="US", opener=None):
-    opener = urlopen if opener is None else opener
+    opener = open_url if opener is None else opener
     search_query = query.strip()
     if not search_query:
         return []
